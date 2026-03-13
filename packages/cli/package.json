@@ -1,0 +1,20 @@
+{
+  "name": "@nexusflow/cli",
+  "version": "0.1.0",
+  "description": "CLI: init, connect, generate, db sync",
+  "type": "module",
+  "bin": {
+    "nexusflow": "bin/nexusflow.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch"
+  },
+  "dependencies": {
+    "@nexusflow/core": "0.1.0",
+    "@nexusflow/server": "0.1.0"
+  },
+  "license": "MIT"
+}

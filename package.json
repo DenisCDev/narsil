@@ -1,0 +1,24 @@
+{
+  "name": "nexusflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "High-performance backend framework for Next.js",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces --if-present",
+    "clean": "rm -rf packages/*/dist",
+    "typecheck": "tsc --build"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "@types/react": "^19.2.14",
+    "typescript": "^5.9.3"
+  }
+}
