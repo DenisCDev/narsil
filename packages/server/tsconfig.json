@@ -7,7 +7,6 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src"],
-  "references": [
-    { "path": "../core" }
-  ]
+  "exclude": ["src/**/*.test.ts"],
+  "references": [{ "path": "../cache" }]
 }

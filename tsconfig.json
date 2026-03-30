@@ -1,15 +1,12 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/core" },
-    { "path": "packages/server" },
-    { "path": "packages/client" },
-    { "path": "packages/next" },
-    { "path": "packages/db-supabase" },
-    { "path": "packages/db-postgres" },
-    { "path": "packages/db-firebase" },
-    { "path": "packages/cli" },
     { "path": "packages/cache" },
-    { "path": "packages/realtime" }
+    { "path": "packages/server" },
+    { "path": "packages/drizzle" },
+    { "path": "packages/narsil" },
+    { "path": "packages/client-sdk" },
+    { "path": "packages/react" },
+    { "path": "packages/cli" }
   ]
 }

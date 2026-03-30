@@ -1,7 +1,6 @@
 {
-  "name": "@nexusflow/server",
-  "version": "0.1.0",
-  "description": "Server runtime: router, middleware, handler",
+  "name": "@narsil/server",
+  "version": "2.0.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,14 +8,35 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./middleware": {
+      "types": "./dist/middleware.d.ts",
+      "import": "./dist/middleware.js"
+    },
+    "./adapters": {
+      "types": "./dist/adapters/web-standard.d.ts",
+      "import": "./dist/adapters/web-standard.js"
+    },
+    "./adapters/node": {
+      "types": "./dist/adapters/node.d.ts",
+      "import": "./dist/adapters/node.js"
+    },
+    "./adapters/vercel": {
+      "types": "./dist/adapters/vercel.d.ts",
+      "import": "./dist/adapters/vercel.js"
+    },
+    "./security": {
+      "types": "./dist/security/index.d.ts",
+      "import": "./dist/security/index.js"
     }
   },
+  "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc --build",
-    "dev": "tsc --build --watch"
+    "build": "tsc",
+    "dev": "tsc --watch"
   },
   "dependencies": {
-    "@nexusflow/core": "0.1.0"
+    "@narsil/cache": "2.0.0"
   },
   "license": "MIT"
 }

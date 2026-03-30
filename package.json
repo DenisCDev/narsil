@@ -1,24 +1,29 @@
 {
-  "name": "nexusflow",
-  "version": "0.1.0",
+  "name": "narsil",
+  "version": "2.0.0",
   "private": true,
-  "description": "High-performance backend framework for Next.js",
-  "workspaces": [
-    "packages/*"
-  ],
+  "description": "The fastest backend for Next.js applications",
+  "workspaces": ["packages/*"],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "dev": "npm run dev --workspaces --if-present",
+    "build": "tsc --build",
+    "dev": "tsc --build --watch",
     "clean": "rm -rf packages/*/dist",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build --noEmit",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^25.5.0",
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.2.14",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^3.1.1"
   }
 }

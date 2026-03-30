@@ -1,0 +1,23 @@
+{
+  "name": "narsil",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@narsil/server": "2.0.0",
+    "@narsil/drizzle": "2.0.0"
+  },
+  "license": "MIT"
+}

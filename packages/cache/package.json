@@ -1,7 +1,6 @@
 {
-  "name": "@nexusflow/cache",
-  "version": "0.1.0",
-  "description": "Multi-layer caching: LRU, Redis, Next.js cache tags",
+  "name": "@narsil/cache",
+  "version": "2.0.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,12 +10,10 @@
       "import": "./dist/index.js"
     }
   },
+  "files": ["dist", "README.md"],
   "scripts": {
-    "build": "tsc --build",
-    "dev": "tsc --build --watch"
-  },
-  "dependencies": {
-    "@nexusflow/core": "0.1.0"
+    "build": "tsc",
+    "dev": "tsc --watch"
   },
   "license": "MIT"
 }

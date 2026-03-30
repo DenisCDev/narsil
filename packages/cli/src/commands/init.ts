@@ -1,194 +1,177 @@
 /**
  * CLI: init command
  *
- * Scaffolds NexusFlow in an existing Next.js project:
- * - Creates nexusflow.config.ts
- * - Creates src/models/ directory
- * - Creates app/api/[...nexusflow]/route.ts
- * - Creates src/nexusflow/caller.ts
+ * Scaffolds a Narsil v2 backend project.
+ * Detects Next.js or Vite and creates the appropriate structure.
  */
 
-import { writeFileSync, mkdirSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 export async function execute(_args: string[]): Promise<void> {
-  const cwd = process.cwd()
-  console.log('\n  NexusFlow — Initializing...\n')
+  const cwd = process.cwd();
 
-  // 1. Create config file
-  const configPath = join(cwd, 'nexusflow.config.ts')
-  if (!existsSync(configPath)) {
-    writeFileSync(configPath, CONFIG_TEMPLATE)
-    console.log('  Created nexusflow.config.ts')
-  } else {
-    console.log('  nexusflow.config.ts already exists, skipping')
+  console.log("\n  Narsil — Initializing project...\n");
+
+  // Detect frontend framework
+  const isNextjs =
+    existsSync(join(cwd, "next.config.js")) ||
+    existsSync(join(cwd, "next.config.ts")) ||
+    existsSync(join(cwd, "next.config.mjs"));
+  const isVite = existsSync(join(cwd, "vite.config.ts")) || existsSync(join(cwd, "vite.config.js"));
+
+  if (isNextjs) console.log("  Detected: Next.js project");
+  else if (isVite) console.log("  Detected: Vite project");
+  else console.log("  No frontend framework detected — creating standalone backend");
+
+  // Create backend directory structure
+  const backendDir = join(cwd, "backend");
+  const dirs = [join(backendDir, "src", "db"), join(backendDir, "src", "modules")];
+
+  for (const dir of dirs) {
+    mkdirSync(dir, { recursive: true });
   }
 
-  // 2. Create models directory
-  const modelsDir = join(cwd, 'src', 'models')
-  if (!existsSync(modelsDir)) {
-    mkdirSync(modelsDir, { recursive: true })
-    writeFileSync(join(modelsDir, 'example.ts'), EXAMPLE_MODEL)
-    console.log('  Created src/models/example.ts')
+  // Generate backend/src/db/schema.ts
+  if (!existsSync(join(backendDir, "src", "db", "schema.ts"))) {
+    writeFileSync(
+      join(backendDir, "src", "db", "schema.ts"),
+      `import { pgTable, uuid, text, timestamp, boolean } from "drizzle-orm/pg-core"
+
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  role: text("role").default("user"),
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+})
+`,
+    );
+    console.log("  Created: backend/src/db/schema.ts");
   }
 
-  // 3. Create API route handler
-  const routeDir = join(cwd, 'src', 'app', 'api', '[...nexusflow]')
-  if (!existsSync(routeDir)) {
-    mkdirSync(routeDir, { recursive: true })
-    writeFileSync(join(routeDir, 'route.ts'), ROUTE_HANDLER_TEMPLATE)
-    console.log('  Created src/app/api/[...nexusflow]/route.ts')
+  // Generate backend/src/db/client.ts
+  if (!existsSync(join(backendDir, "src", "db", "client.ts"))) {
+    writeFileSync(
+      join(backendDir, "src", "db", "client.ts"),
+      `import { createDb } from "@narsil/drizzle"
+
+export const db = await createDb({
+  url: process.env.DATABASE_URL!,
+})
+`,
+    );
+    console.log("  Created: backend/src/db/client.ts");
   }
 
-  // 4. Create caller for RSC
-  const nexusflowDir = join(cwd, 'src', 'nexusflow')
-  if (!existsSync(nexusflowDir)) {
-    mkdirSync(nexusflowDir, { recursive: true })
-    writeFileSync(join(nexusflowDir, 'caller.ts'), CALLER_TEMPLATE)
-    console.log('  Created src/nexusflow/caller.ts')
+  // Generate backend/src/modules/users.ts
+  if (!existsSync(join(backendDir, "src", "modules", "users.ts"))) {
+    writeFileSync(
+      join(backendDir, "src", "modules", "users.ts"),
+      `import { defineModule } from "narsil"
+import { users } from "../db/schema"
+
+export const usersModule = defineModule({
+  schema: users,
+  crud: {
+    list: { defaultLimit: 20, maxLimit: 100 },
+    create: true,
+    update: true,
+    delete: true,
+  },
+  permissions: {
+    list: "public",
+    create: "authenticated",
+    update: "owner",
+    delete: "admin",
+  },
+})
+`,
+    );
+    console.log("  Created: backend/src/modules/users.ts");
   }
 
-  // 5. Add .nexusflow to gitignore
-  const gitignorePath = join(cwd, '.gitignore')
-  if (existsSync(gitignorePath)) {
-    const content = await import('node:fs').then(fs => fs.readFileSync(gitignorePath, 'utf-8'))
-    if (!content.includes('.nexusflow')) {
-      writeFileSync(gitignorePath, content + '\n# NexusFlow generated\n.nexusflow/\n')
-      console.log('  Updated .gitignore')
-    }
+  // Generate backend/src/server.ts
+  if (!existsSync(join(backendDir, "src", "server.ts"))) {
+    writeFileSync(
+      join(backendDir, "src", "server.ts"),
+      `import { createApp } from "narsil"
+import { db } from "./db/client"
+import { usersModule } from "./modules/users"
+
+const app = createApp({ db })
+  .module("users", usersModule)
+
+app.start(3001)
+
+export default app
+export type AppType = typeof app
+`,
+    );
+    console.log("  Created: backend/src/server.ts");
   }
 
-  console.log(`
-  Done! Next steps:
-
-  1. Configure your database in nexusflow.config.ts
-  2. Define models in src/models/
-  3. Run: npx nexusflow generate
-  4. Start your Next.js dev server
-  `)
-}
-
-const CONFIG_TEMPLATE = `import { defineConfig } from '@nexusflow/core'
+  // Generate backend/drizzle.config.ts
+  if (!existsSync(join(backendDir, "drizzle.config.ts"))) {
+    writeFileSync(
+      join(backendDir, "drizzle.config.ts"),
+      `import { defineConfig } from "drizzle-kit"
 
 export default defineConfig({
-  modelsDir: './src/models',
-  outputDir: './.nexusflow/generated',
-
-  database: {
-    adapter: 'supabase',
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  },
-
-  next: {
-    apiPrefix: '/api',
-    generateActions: true,
-    generateClient: true,
-  },
-
-  realtime: {
-    enabled: true,
-    adapter: 'supabase',
+  schema: "./src/db/schema.ts",
+  out: "./drizzle",
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
   },
 })
-`
+`,
+    );
+    console.log("  Created: backend/drizzle.config.ts");
+  }
 
-const EXAMPLE_MODEL = `import { defineModel, field } from '@nexusflow/core'
-
-export const posts = defineModel('posts', {
-  fields: {
-    id:        field.uuid().primaryKey().default('gen_random_uuid()'),
-    title:     field.text().min(1).max(200),
-    content:   field.text().optional(),
-    status:    field.enum(['draft', 'published', 'archived']).default('draft'),
-    authorId:  field.uuid().references('profiles', 'id'),
-    createdAt: field.timestamp().default('now()'),
-    updatedAt: field.timestamp().default('now()').onUpdate('now()'),
-  },
-
-  permissions: {
-    list:   'authenticated',
-    get:    'authenticated',
-    create: 'authenticated',
-    update: 'owner',
-    delete: 'owner',
-  },
-
-  ownerField: 'authorId',
-})
-`
-
-const ROUTE_HANDLER_TEMPLATE = `import { createNexusHandler } from '@nexusflow/next'
-import { createSupabaseAdapter, getUser } from '@nexusflow/db-supabase'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-
-// Import your models
-import { posts } from '@/models/example'
-
-const handler = createNexusHandler({
-  models: [posts],
-  createContext: async (req) => {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => cookieStore.getAll(),
-          setAll: (cookiesToSet) => {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options)
-            })
+  // Generate backend/package.json
+  if (!existsSync(join(backendDir, "package.json"))) {
+    writeFileSync(
+      join(backendDir, "package.json"),
+      `${JSON.stringify(
+        {
+          name: "backend",
+          private: true,
+          type: "module",
+          scripts: {
+            dev: "tsx --watch src/server.ts",
+            build: "tsc",
+            start: "node dist/server.js",
+            "db:push": "drizzle-kit push",
+            "db:pull": "drizzle-kit pull",
+            "db:generate": "drizzle-kit generate",
+            "db:migrate": "drizzle-kit migrate",
+          },
+          dependencies: {
+            narsil: "latest",
+            "@narsil/drizzle": "latest",
+            "drizzle-orm": "latest",
+            postgres: "latest",
+          },
+          devDependencies: {
+            "drizzle-kit": "latest",
+            tsx: "latest",
+            typescript: "^5.9.0",
           },
         },
-      }
-    )
+        null,
+        2,
+      )}\n`,
+    );
+    console.log("  Created: backend/package.json");
+  }
 
-    const user = await getUser(supabase)
-    const db = createSupabaseAdapter(supabase)
-
-    return { user, db, headers: {} }
-  },
-})
-
-export { handler as GET, handler as POST, handler as PATCH, handler as DELETE }
-`
-
-const CALLER_TEMPLATE = `import { createCaller, configureNexusCaller } from '@nexusflow/next'
-import { createSupabaseAdapter, getUser } from '@nexusflow/db-supabase'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-
-// Import your models
-import { posts } from '@/models/example'
-
-configureNexusCaller({
-  models: [posts],
-  createContext: async () => {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => cookieStore.getAll(),
-          setAll: (cookiesToSet) => {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options)
-            })
-          },
-        },
-      }
-    )
-
-    const user = await getUser(supabase)
-    const db = createSupabaseAdapter(supabase)
-
-    return { user, db, headers: {} }
-  },
-})
-
-export { createCaller }
-`
+  console.log("\n  Done! Next steps:");
+  console.log("  1. Set DATABASE_URL in your environment");
+  console.log("  2. cd backend && npm install");
+  console.log("  3. npx narsil dev");
+  console.log();
+}
