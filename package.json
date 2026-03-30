@@ -3,7 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "description": "The fastest backend for Next.js applications",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "tsc --build",
     "dev": "tsc --build --watch",
@@ -23,6 +25,8 @@
     "@biomejs/biome": "^1.9.4",
     "@types/node": "^22.0.0",
     "@types/react": "^19.2.14",
+    "drizzle-orm": "^0.45.2",
+    "react": "^19.2.4",
     "typescript": "^5.9.3",
     "vitest": "^3.1.1"
   }
