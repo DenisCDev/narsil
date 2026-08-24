@@ -6,6 +6,7 @@
  */
 
 import { generateCrudHandlers } from "@narsil/drizzle";
+import { generatePrismaHandlers } from "@narsil/prisma";
 import { type HttpMethod, NexusRouter, type RouteHandler } from "@narsil/server";
 import { getAuthToken, getClientIP, parseHeaders } from "@narsil/server/adapters";
 import { composeMiddleware } from "@narsil/server/middleware";
@@ -102,11 +103,16 @@ function registerModule(state: AppState, basePath: string, name: string, config:
   const prefix = `${basePath}/${name}`;
   const crud = config.crud ?? {};
 
-  // Generate CRUD handlers from Drizzle schema
-  const handlers = generateCrudHandlers(config.schema, state.config.db, {
+  const crudOpts = {
     defaultLimit: typeof crud.list === "object" ? crud.list.defaultLimit : undefined,
     maxLimit: typeof crud.list === "object" ? crud.list.maxLimit : undefined,
-  });
+  };
+  if (!config.prisma && config.schema === undefined) {
+    throw new Error(`module "${name}" needs schema (Drizzle) or prisma (model name)`);
+  }
+  const handlers = config.prisma
+    ? generatePrismaHandlers(config.prisma, state.config.db as object, crudOpts)
+    : generateCrudHandlers(config.schema, state.config.db, crudOpts);
 
   // Register CRUD routes
   if (crud.list !== false) {
@@ -146,7 +152,7 @@ function registerModule(state: AppState, basePath: string, name: string, config:
       state.router.add(
         routeDef.method as HttpMethod,
         routePath,
-        wrapHandler(routeDef.handler as RouteHandler, config, routeName, "custom"),
+        wrapHandler(routeDef.handler as RouteHandler, config, routeName),
         {
           module: name,
           operation: routeName,
@@ -158,23 +164,17 @@ function registerModule(state: AppState, basePath: string, name: string, config:
 
 // ─── Permission + Hook Wrapper ───────────────────────────────────────
 
-function wrapHandler(
-  handler: RouteHandler,
-  config: ModuleConfig,
-  operation: string,
-  kind: "crud" | "custom" = "crud",
-): RouteHandler {
+function wrapHandler(handler: RouteHandler, config: ModuleConfig, operation: string): RouteHandler {
   return async (ctx: NexusContext): Promise<unknown> => {
-    const crudOp = operation as "list" | "get" | "create" | "update" | "delete";
-    const permission = config.permissions?.[crudOp] ?? (config.permissions as Record<string, unknown> | undefined)?.[operation];
-    if (kind === "crud" && permission === undefined) {
+    const permission = config.permissions?.[operation];
+    if (permission === undefined) {
       const { NexusForbiddenError } = await import("./errors.js");
       throw new NexusForbiddenError();
     }
     if (permission) {
       await checkPermission(permission, ctx);
     }
-    if (usesOwner(permission) && ctx.user) {
+    if (ctx.user && (config.ownerField || moduleUsesOwner(config))) {
       ctx.ownerId = ctx.user.id;
       ctx.ownerField = config.ownerField ?? "userId";
     }
@@ -265,6 +265,10 @@ async function checkPreset(preset: unknown, ctx: NexusContext): Promise<void> {
 function usesOwner(rule: unknown): boolean {
   if (rule === "owner") return true;
   return Array.isArray(rule) && rule.includes("owner");
+}
+
+function moduleUsesOwner(config: ModuleConfig): boolean {
+  return Object.values(config.permissions ?? {}).some((rule) => usesOwner(rule));
 }
 
 // ─── Request Handler ─────────────────────────────────────────────────

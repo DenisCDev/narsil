@@ -83,6 +83,7 @@ export const usersModule = defineModule({
   },
   permissions: {
     list: "public",
+    get: "public",
     create: "authenticated",
     update: "owner",
     delete: "admin",

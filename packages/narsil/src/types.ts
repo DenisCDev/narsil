@@ -123,8 +123,10 @@ export interface ModuleConfig<
   TSchema = unknown,
   TRoutes extends Record<string, RouteDefinition> = Record<string, RouteDefinition>,
 > {
-  /** Drizzle pgTable schema */
-  schema: TSchema;
+  /** Drizzle pgTable schema (omit when `prisma` is set) */
+  schema?: TSchema;
+  /** Prisma Client model name, e.g. `'user'` — default Next.js full-stack analog */
+  prisma?: string;
   /**
    * Column that owns a row when a permission is `owner` (default: `userId`).
    * List/get/update/delete are scoped to `ctx.user.id`; create stamps the column.
@@ -139,6 +141,7 @@ export interface ModuleConfig<
     create?: PermissionRule;
     update?: PermissionRule;
     delete?: PermissionRule;
+    [route: string]: PermissionRule | undefined;
   };
   /** Lifecycle hooks */
   hooks?: ModuleHooks;

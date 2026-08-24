@@ -5,3 +5,6 @@ dist/
 .env
 .env.local
 coverage/
+bench/next16/.next
+bench/next16/node_modules
+.smaug-tsc-*.json

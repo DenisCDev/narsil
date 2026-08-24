@@ -1,5 +1,5 @@
 {
-  "name": "narsil",
+  "name": "@narsil/prisma",
   "version": "2.0.0",
   "type": "module",
   "main": "dist/index.js",
@@ -15,10 +15,8 @@
     "build": "tsc",
     "dev": "tsc --watch"
   },
-  "dependencies": {
-    "@narsil/server": "2.0.0",
-    "@narsil/drizzle": "2.0.0",
-    "@narsil/prisma": "2.0.0"
+  "peerDependencies": {
+    "@prisma/client": ">=5.0.0"
   },
   "license": "MIT"
 }

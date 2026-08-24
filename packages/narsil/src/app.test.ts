@@ -8,14 +8,20 @@ vi.mock("@narsil/drizzle", () => ({
       { id: "2", name: "Bob" },
     ],
     get: async (ctx: any) => {
-      if (ctx.ownerId && ctx.params?.id === "foreign") {
-        const err = Object.assign(new Error("posts (foreign) not found"), {
+      const rows = [
+        { id: "1", name: "Alice", userId: "u1" },
+        { id: "42", name: "Alice", userId: "u1" },
+        { id: "foreign", name: "Other", userId: "u2" },
+      ];
+      const row = rows.find((r) => r.id === ctx.params?.id);
+      if (!row || (ctx.ownerId && row.userId !== ctx.ownerId)) {
+        const err = Object.assign(new Error("character not found"), {
           status: 404,
-          toJSON: () => ({ error: { code: "NOT_FOUND", message: "posts (foreign) not found" } }),
+          toJSON: () => ({ error: { code: "NOT_FOUND", message: "character not found" } }),
         });
         throw err;
       }
-      return { id: ctx.params?.id, name: "Alice", userId: ctx.ownerId };
+      return row;
     },
     create: async (ctx: any) => ({
       id: "3",
@@ -71,7 +77,7 @@ describe("createApp integration", () => {
       const res = await app.fetch(new Request("http://localhost/api/users/42"));
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toEqual({ id: "42", name: "Alice" });
+      expect(body).toEqual({ id: "42", name: "Alice", userId: "u1" });
     });
 
     it("POST /api/users creates and returns 201", async () => {
@@ -232,7 +238,54 @@ describe("createApp integration", () => {
     });
   });
 
+  describe("prisma analog", () => {
+    it("GET /api/users lists through a Prisma-shaped client", async () => {
+      const prisma = {
+        user: {
+          findMany: async () => [{ id: "1", name: "Ada" }],
+          findFirst: async () => null,
+          create: async (args: { data: Record<string, unknown> }) => ({ id: "9", ...args.data }),
+          update: async () => ({}),
+          delete: async () => ({}),
+        },
+      };
+      const app = createApp({ db: prisma }).module("users", {
+        prisma: "user",
+        permissions: {
+          list: "public",
+          get: "public",
+          create: "public",
+          update: "public",
+          delete: "public",
+        },
+      });
+      const res = await app.fetch(new Request("http://localhost/api/users"));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual([{ id: "1", name: "Ada" }]);
+    });
+  });
+
   describe("deny by default", () => {
+    it("rejects module() without schema or prisma", () => {
+      expect(() => createApp({ db: fakeDb }).module("users", { permissions: { list: "public" } })).toThrow(
+        /schema \(Drizzle\) or prisma/,
+      );
+    });
+
+    it("rejects a custom route without a permission rule", async () => {
+      const app = createApp({ db: fakeDb }).module(
+        "users",
+        createTestModule({
+          routes: (router) =>
+            ({
+              dump: router.get("/dump", async () => ({ secret: true })),
+            }) as Record<string, import("./types.js").RouteDefinition>,
+        }),
+      );
+      const res = await app.fetch(new Request("http://localhost/api/users/dump"));
+      expect(res.status).toBe(403);
+    });
+
     it("rejects CRUD when the operation has no permission rule", async () => {
       const app = createApp({ db: fakeDb }).module("users", {
         schema: fakeSchema,
@@ -267,6 +320,29 @@ describe("createApp integration", () => {
         }),
       );
       expect(res.status).toBe(404);
+    });
+
+    it("stamps ownerField on authenticated create when update is owner", async () => {
+      const app = createApp({
+        db: fakeDb,
+        auth: async () => ({ id: "u1", role: "user" }),
+      }).module(
+        "users",
+        createTestModule({
+          permissions: { create: "authenticated", update: "owner" },
+        }),
+      );
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer t" },
+          body: JSON.stringify({ name: "Mine", userId: "attacker" }),
+        }),
+      );
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.userId).toBe("u1");
     });
 
     it("stamps ownerField on create", async () => {
@@ -305,6 +381,7 @@ describe("createApp integration", () => {
       const app = createApp({ db: fakeDb }).module(
         "users",
         createTestModule({
+          permissions: { missing: "public" },
           routes: (router) =>
             ({
               missing: router.get("/missing", async (): Promise<unknown> => {

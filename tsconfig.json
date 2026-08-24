@@ -4,6 +4,7 @@
     { "path": "packages/cache" },
     { "path": "packages/server" },
     { "path": "packages/drizzle" },
+    { "path": "packages/prisma" },
     { "path": "packages/narsil" },
     { "path": "packages/client-sdk" },
     { "path": "packages/react" },
