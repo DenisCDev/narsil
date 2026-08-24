@@ -42,6 +42,9 @@ export interface NexusContext {
   body?: unknown;
   /** Request object */
   request: Request;
+  /** Set when the operation uses the `owner` permission */
+  ownerId?: string;
+  ownerField?: string;
   /** Extra properties set by middleware */
   [key: string]: unknown;
 }
@@ -122,6 +125,11 @@ export interface ModuleConfig<
 > {
   /** Drizzle pgTable schema */
   schema: TSchema;
+  /**
+   * Column that owns a row when a permission is `owner` (default: `userId`).
+   * List/get/update/delete are scoped to `ctx.user.id`; create stamps the column.
+   */
+  ownerField?: string;
   /** Auto-CRUD configuration (default: all enabled) */
   crud?: CrudConfig;
   /** Permission rules per operation */

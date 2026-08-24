@@ -25,6 +25,10 @@
       "types": "./dist/adapters/vercel.d.ts",
       "import": "./dist/adapters/vercel.js"
     },
+    "./adapters/bun": {
+      "types": "./dist/adapters/bun.d.ts",
+      "import": "./dist/adapters/bun.js"
+    },
     "./security": {
       "types": "./dist/security/index.d.ts",
       "import": "./dist/security/index.js"

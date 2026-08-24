@@ -9,7 +9,8 @@ import { generateCrudHandlers } from "@narsil/drizzle";
 import { type HttpMethod, NexusRouter, type RouteHandler } from "@narsil/server";
 import { getAuthToken, getClientIP, parseHeaders } from "@narsil/server/adapters";
 import { composeMiddleware } from "@narsil/server/middleware";
-import { NexusError } from "./errors.js";
+import { rateLimit } from "@narsil/server/security";
+import { NexusError, NexusPayloadTooLargeError, NexusValidationError } from "./errors.js";
 import { createModuleRouter } from "./module.js";
 import type { AppConfig, ModuleConfig, NexusApp, NexusContext, NexusMiddleware, SecurityConfig } from "./types.js";
 
@@ -35,6 +36,7 @@ const DEFAULT_SECURITY: Required<SecurityConfig> = {
 
 export function createApp(config: AppConfig): NexusApp {
   const basePath = config.basePath ?? "/api";
+  const security = { ...DEFAULT_SECURITY, ...config.security };
 
   const state: AppState = {
     config,
@@ -42,6 +44,10 @@ export function createApp(config: AppConfig): NexusApp {
     middlewares: [],
     modules: new Map(),
   };
+
+  if (security.rateLimit !== false) {
+    state.middlewares.push(rateLimit(security.rateLimit));
+  }
 
   // Build the app object with chaining
   const app: NexusApp = {
@@ -60,14 +66,25 @@ export function createApp(config: AppConfig): NexusApp {
     },
 
     async start(port = 3000): Promise<void> {
-      const { createNodeServer } = await import("@narsil/server/adapters/node");
-      const server = createNodeServer(app.fetch);
-      server.listen(port, () => {
-        console.log(`\n  Narsil v2 — Running on http://localhost:${port}${basePath}\n`);
+      const printRoutes = (host: string) => {
+        console.log(`\n  Narsil v2 — ${host}${basePath}\n`);
         for (const route of state.router.getRoutes()) {
           console.log(`  ${route.method.padEnd(7)} ${route.path}`);
         }
         console.log();
+      };
+
+      if (typeof (globalThis as { Bun?: unknown }).Bun !== "undefined") {
+        const { createBunServer } = await import("@narsil/server/adapters/bun");
+        createBunServer(app.fetch, port);
+        printRoutes(`Bun.serve http://localhost:${port}`);
+        return;
+      }
+
+      const { createNodeServer } = await import("@narsil/server/adapters/node");
+      const server = createNodeServer(app.fetch);
+      server.listen(port, () => {
+        printRoutes(`Node http://localhost:${port}`);
       });
     },
 
@@ -147,6 +164,10 @@ function wrapHandler(
     if (permission) {
       await checkPermission(permission, ctx);
     }
+    if (usesOwner(permission) && ctx.user) {
+      ctx.ownerId = ctx.user.id;
+      ctx.ownerField = config.ownerField ?? "userId";
+    }
 
     // Run before hooks
     if (operation === "create" && config.hooks?.beforeCreate) {
@@ -207,7 +228,7 @@ async function checkPermission(rule: any, ctx: NexusContext): Promise<void> {
         }
         return;
       case "owner":
-        // Owner check requires the record — handled at CRUD level
+        // Row scoping happens in CRUD via ctx.ownerId; here we only require a user.
         if (!ctx.user) {
           const { NexusAuthError } = await import("./errors.js");
           throw new NexusAuthError();
@@ -215,6 +236,11 @@ async function checkPermission(rule: any, ctx: NexusContext): Promise<void> {
         return;
     }
   }
+}
+
+function usesOwner(rule: unknown): boolean {
+  if (rule === "owner") return true;
+  return Array.isArray(rule) && rule.includes("owner");
 }
 
 // ─── Request Handler ─────────────────────────────────────────────────
@@ -225,13 +251,15 @@ async function handleRequest(state: AppState, _basePath: string, request: Reques
     const method = request.method.toUpperCase() as HttpMethod;
     const security = { ...DEFAULT_SECURITY, ...state.config.security };
 
+    const requestOrigin = request.headers.get("origin");
+
     // CORS preflight
     if (method === ("OPTIONS" as any)) {
       const corsConfig = security.cors || { origin: "*" };
       if (typeof corsConfig === "object") {
         return new Response(null, {
           status: 204,
-          headers: buildCorsHeaders(corsConfig),
+          headers: buildCorsHeaders(corsConfig, requestOrigin),
         });
       }
     }
@@ -268,21 +296,19 @@ async function handleRequest(state: AppState, _basePath: string, request: Reques
       request,
     };
 
-    // Parse body for mutations
+    // Parse body for mutations — measure actual bytes, not just Content-Length
     if (method === "POST" || method === "PUT" || method === "PATCH") {
-      const contentType = request.headers.get("content-type");
-
-      // Check body size
-      if (security.maxBodySize !== false) {
-        const contentLength = request.headers.get("content-length");
-        if (contentLength && Number.parseInt(contentLength) > (security.maxBodySize as number)) {
-          const { NexusPayloadTooLargeError } = await import("./errors.js");
-          throw new NexusPayloadTooLargeError(security.maxBodySize as number);
-        }
+      const buf = await request.arrayBuffer();
+      if (security.maxBodySize !== false && buf.byteLength > security.maxBodySize) {
+        throw new NexusPayloadTooLargeError(security.maxBodySize);
       }
-
-      if (contentType?.includes("application/json")) {
-        ctx.body = await request.json();
+      const contentType = request.headers.get("content-type");
+      if (contentType?.includes("application/json") && buf.byteLength > 0) {
+        try {
+          ctx.body = JSON.parse(new TextDecoder().decode(buf)) as unknown;
+        } catch {
+          throw new NexusValidationError("body", "invalid json");
+        }
       }
     }
 
@@ -318,9 +344,17 @@ async function handleRequest(state: AppState, _basePath: string, request: Reques
       "Content-Type": "application/json",
     };
 
+    const extra = ctx._rateLimitHeaders;
+    if (extra && typeof extra === "object") {
+      Object.assign(responseHeaders, extra as Record<string, string>);
+    }
+
     // Add CORS headers
     if (security.cors !== false) {
-      const corsHeaders = buildCorsHeaders(typeof security.cors === "object" ? security.cors : { origin: "*" });
+      const corsHeaders = buildCorsHeaders(
+        typeof security.cors === "object" ? security.cors : { origin: "*" },
+        requestOrigin,
+      );
       Object.assign(responseHeaders, corsHeaders);
     }
 
@@ -340,24 +374,54 @@ async function handleRequest(state: AppState, _basePath: string, request: Reques
       headers: responseHeaders,
     });
   } catch (error) {
-    if (error instanceof NexusError) {
-      return Response.json(error.toJSON(), { status: error.status });
+    const mapped = mapHttpError(error);
+    if (mapped) {
+      return Response.json(mapped.body, { status: mapped.status });
     }
     console.error("[Narsil] Unhandled error:", error);
     return Response.json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }, { status: 500 });
   }
 }
 
+function mapHttpError(error: unknown): { status: number; body: unknown } | null {
+  if (error instanceof NexusError) {
+    return { status: error.status, body: error.toJSON() };
+  }
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "status" in error &&
+    typeof (error as { status: unknown }).status === "number" &&
+    "toJSON" in error &&
+    typeof (error as { toJSON: unknown }).toJSON === "function"
+  ) {
+    const err = error as { status: number; toJSON: () => unknown };
+    return { status: err.status, body: err.toJSON() };
+  }
+  return null;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function buildCorsHeaders(cors: {
-  origin?: string | string[];
-  methods?: string[];
-  headers?: string[];
-  credentials?: boolean;
-}): Record<string, string> {
+function buildCorsHeaders(
+  cors: {
+    origin?: string | string[];
+    methods?: string[];
+    headers?: string[];
+    credentials?: boolean;
+  },
+  requestOrigin?: string | null,
+): Record<string, string> {
+  let allowOrigin = "*";
+  if (Array.isArray(cors.origin)) {
+    allowOrigin =
+      requestOrigin && cors.origin.includes(requestOrigin) ? requestOrigin : (cors.origin[0] ?? "*");
+  } else if (cors.origin) {
+    allowOrigin = cors.origin;
+  }
+
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Origin": Array.isArray(cors.origin) ? (cors.origin[0] ?? "*") : (cors.origin ?? "*"),
+    "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Methods": (cors.methods ?? ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]).join(", "),
     "Access-Control-Allow-Headers": (cors.headers ?? ["Content-Type", "Authorization"]).join(", "),
   };

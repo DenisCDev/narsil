@@ -24,7 +24,8 @@ export interface CrudHandlers {
  * Generate CRUD handlers for a Drizzle table.
  *
  * These handlers are "raw" — they don't check permissions or run hooks.
- * The module system (app.ts) wraps them with permission checks and hooks.
+ * When `ctx.ownerField` + `ctx.ownerId` are set (the `owner` permission),
+ * every query is scoped to that column and create stamps it.
  */
 export function generateCrudHandlers(table: any, db: any, options: CrudOptions = {}): CrudHandlers {
   const defaultLimit = options.defaultLimit ?? 50;
@@ -34,14 +35,15 @@ export function generateCrudHandlers(table: any, db: any, options: CrudOptions =
   return {
     list: async (ctx) => {
       const body = ctx.body as Record<string, unknown> | undefined;
+      const { eq } = await importDrizzle();
 
       let query = db.select().from(table);
+      const ownerClause = ownerEq(table, ctx, eq);
+      if (ownerClause) query = query.where(ownerClause);
 
-      // Apply limit
       const limit = Math.min(typeof body?.limit === "number" ? body.limit : defaultLimit, maxLimit);
       query = query.limit(limit);
 
-      // Apply offset
       if (typeof body?.offset === "number") {
         query = query.offset(body.offset);
       }
@@ -50,11 +52,15 @@ export function generateCrudHandlers(table: any, db: any, options: CrudOptions =
     },
 
     get: async (ctx) => {
-      const { eq } = await importDrizzle();
+      const { eq, and } = await importDrizzle();
       const id = ctx.params?.id;
       if (!id) throw createError("VALIDATION", "id", "Required");
 
-      const rows = await db.select().from(table).where(eq(table[pk.name], id)).limit(1);
+      const rows = await db
+        .select()
+        .from(table)
+        .where(scopedWhere(table, ctx, eq, and, eq(table[pk.name], id)))
+        .limit(1);
       const row = rows[0];
       if (!row) throw createError("NOT_FOUND", getTableName(table), id);
       return row;
@@ -66,12 +72,17 @@ export function generateCrudHandlers(table: any, db: any, options: CrudOptions =
         throw createError("VALIDATION", "body", "Request body is required");
       }
 
-      const rows = await db.insert(table).values(data).returning();
+      const values =
+        ctx.ownerField && ctx.ownerId
+          ? { ...(data as Record<string, unknown>), [ctx.ownerField]: ctx.ownerId }
+          : data;
+
+      const rows = await db.insert(table).values(values).returning();
       return rows[0];
     },
 
     update: async (ctx) => {
-      const { eq } = await importDrizzle();
+      const { eq, and } = await importDrizzle();
       const id = ctx.params?.id;
       if (!id) throw createError("VALIDATION", "id", "Required");
 
@@ -80,31 +91,59 @@ export function generateCrudHandlers(table: any, db: any, options: CrudOptions =
         throw createError("VALIDATION", "body", "Request body is required");
       }
 
-      const rows = await db.update(table).set(data).where(eq(table[pk.name], id)).returning();
+      const rows = await db
+        .update(table)
+        .set(data)
+        .where(scopedWhere(table, ctx, eq, and, eq(table[pk.name], id)))
+        .returning();
       const row = rows[0];
       if (!row) throw createError("NOT_FOUND", getTableName(table), id);
       return row;
     },
 
     delete: async (ctx) => {
-      const { eq } = await importDrizzle();
+      const { eq, and } = await importDrizzle();
       const id = ctx.params?.id;
       if (!id) throw createError("VALIDATION", "id", "Required");
 
-      const rows = await db.delete(table).where(eq(table[pk.name], id)).returning();
+      const rows = await db
+        .delete(table)
+        .where(scopedWhere(table, ctx, eq, and, eq(table[pk.name], id)))
+        .returning();
       if (rows.length === 0) throw createError("NOT_FOUND", getTableName(table), id);
       return { success: true };
     },
   };
 }
 
+function ownerEq(
+  table: Record<string, unknown>,
+  ctx: { ownerField?: string; ownerId?: string },
+  eq: (left: unknown, right: unknown) => unknown,
+): unknown {
+  if (!ctx.ownerField || !ctx.ownerId) return undefined;
+  return eq(table[ctx.ownerField], ctx.ownerId);
+}
+
+function scopedWhere(
+  table: Record<string, unknown>,
+  ctx: { ownerField?: string; ownerId?: string },
+  eq: (left: unknown, right: unknown) => unknown,
+  and: (...args: unknown[]) => unknown,
+  primary: unknown,
+): unknown {
+  const owner = ownerEq(table, ctx, eq);
+  return owner ? and(primary, owner) : primary;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 /** Lazy import drizzle-orm operators for tree-shaking */
 async function importDrizzle() {
-  const mod = await (Function('return import("drizzle-orm")')() as Promise<any>);
+  const mod = await import("drizzle-orm");
   return {
-    eq: mod.eq as (left: any, right: any) => any,
+    eq: mod.eq as (left: unknown, right: unknown) => unknown,
+    and: mod.and as (...args: unknown[]) => unknown,
     sql: mod.sql,
   };
 }

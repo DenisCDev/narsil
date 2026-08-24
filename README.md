@@ -178,6 +178,31 @@ permissions: {
 }
 ```
 
+## Performance — this is not a Next.js Route Handler
+
+If you mount Narsil inside `app/api/[[...route]]/route.ts`, you are still inside Next's Function. That path **cannot** be many times faster than the standard Next API: same runtime, same cold start, same pipeline.
+
+The product goal is a **separate HTTP server on Bun**, with [Elysia](https://elysiajs.com) as the host (first-class on Vercel since November 2025). Next stays the UI and calls this API. That is how the request stays off Next's router.
+
+```ts
+import { Elysia } from 'elysia'
+import app from './narsil'
+
+new Elysia()
+  .all('*', ({ request }) => app.fetch(request))
+  .listen(3001)
+```
+
+On Vercel, give the API its own project (not the Next app) and:
+
+```json
+{ "bunVersion": "1.x" }
+```
+
+`app.start()` already prefers `Bun.serve` when the process is Bun, and falls back to Node `http` otherwise. `app.fetch` is the WinterCG contract: Next, Elysia, Cloudflare, and Vercel Functions all speak it.
+
+Vercel Functions (even Elysia + Fluid compute) still have a concurrency ceiling. For a long-lived process that holds many connections, run Bun on Fly/a VPS. Do not promise "instant" on a cold Function.
+
 ## License
 
 MIT
@@ -343,6 +368,31 @@ permissions: {
   delete: ['admin'],                       // Array = qualquer match
 }
 ```
+
+## Performance — isso não é uma Route Handler do Next
+
+Se você montar o Narsil em `app/api/[[...route]]/route.ts`, continua dentro da Function do Next. **Esse caminho não fica muitas vezes mais rápido** que a API padrão: mesmo runtime, mesmo cold start, mesmo pipeline.
+
+O objetivo do produto é um **servidor HTTP separado no Bun**, com [Elysia](https://elysiajs.com) como host (suporte de primeira classe na Vercel desde novembro de 2025). O Next fica na UI e chama essa API. É assim que o request sai do router do Next.
+
+```ts
+import { Elysia } from 'elysia'
+import app from './narsil'
+
+new Elysia()
+  .all('*', ({ request }) => app.fetch(request))
+  .listen(3001)
+```
+
+Na Vercel, o projeto da API é outro (não o do Next) e o `vercel.json` leva:
+
+```json
+{ "bunVersion": "1.x" }
+```
+
+`app.start()` já prefere `Bun.serve` quando o processo é Bun, e cai no `http` do Node se não for. `app.fetch` é o contrato WinterCG: Next, Elysia, Cloudflare e Functions da Vercel falam isso.
+
+Function da Vercel (mesmo Elysia + Fluid compute) ainda tem teto de concorrência. Processo longo, muita gente junta: Bun na Fly/VPS. Não prometa "instantâneo" em Function fria.
 
 ## Licença
 

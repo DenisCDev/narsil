@@ -7,8 +7,21 @@ vi.mock("@narsil/drizzle", () => ({
       { id: "1", name: "Alice" },
       { id: "2", name: "Bob" },
     ],
-    get: async (ctx: any) => ({ id: ctx.params?.id, name: "Alice" }),
-    create: async (ctx: any) => ({ id: "3", ...ctx.body }),
+    get: async (ctx: any) => {
+      if (ctx.ownerId && ctx.params?.id === "foreign") {
+        const err = Object.assign(new Error("posts (foreign) not found"), {
+          status: 404,
+          toJSON: () => ({ error: { code: "NOT_FOUND", message: "posts (foreign) not found" } }),
+        });
+        throw err;
+      }
+      return { id: ctx.params?.id, name: "Alice", userId: ctx.ownerId };
+    },
+    create: async (ctx: any) => ({
+      id: "3",
+      ...ctx.body,
+      ...(ctx.ownerField && ctx.ownerId ? { [ctx.ownerField]: ctx.ownerId } : {}),
+    }),
     update: async (ctx: any) => ({ id: ctx.params?.id, ...ctx.body }),
     delete: async () => ({ success: true }),
   }),
@@ -208,6 +221,115 @@ describe("createApp integration", () => {
       );
 
       expect(capturedUser).toBeNull();
+    });
+  });
+
+  describe("owner isolation", () => {
+    it("rejects anonymous owner routes", async () => {
+      const app = createApp({ db: fakeDb }).module(
+        "users",
+        createTestModule({ permissions: { get: "owner" } }),
+      );
+      const res = await app.fetch(new Request("http://localhost/api/users/1"));
+      expect(res.status).toBe(401);
+    });
+
+    it("does not leak another owner's row", async () => {
+      const app = createApp({
+        db: fakeDb,
+        auth: async () => ({ id: "u1", role: "user" }),
+      }).module("users", createTestModule({ permissions: { get: "owner" } }));
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/users/foreign", {
+          headers: { Authorization: "Bearer t" },
+        }),
+      );
+      expect(res.status).toBe(404);
+    });
+
+    it("stamps ownerField on create", async () => {
+      const app = createApp({
+        db: fakeDb,
+        auth: async () => ({ id: "u1", role: "user" }),
+      }).module("users", createTestModule({ permissions: { create: "owner" } }));
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer t" },
+          body: JSON.stringify({ name: "Mine", userId: "attacker" }),
+        }),
+      );
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body.userId).toBe("u1");
+    });
+  });
+
+  describe("security defaults", () => {
+    it("rate-limits after max requests", async () => {
+      const app = createApp({
+        db: fakeDb,
+        security: { rateLimit: { windowMs: 60_000, max: 1 } },
+      }).module("users", createTestModule());
+
+      const first = await app.fetch(new Request("http://localhost/api/users"));
+      const second = await app.fetch(new Request("http://localhost/api/users"));
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(429);
+    });
+
+    it("maps duck-typed CRUD errors to their HTTP status", async () => {
+      const app = createApp({ db: fakeDb }).module(
+        "users",
+        createTestModule({
+          routes: (router) =>
+            ({
+              missing: router.get("/missing", async (): Promise<unknown> => {
+                const err = Object.assign(new Error("users (nope) not found"), {
+                  status: 404,
+                  toJSON: () => ({ error: { code: "NOT_FOUND", message: "users (nope) not found" } }),
+                });
+                throw err;
+              }),
+            }) as Record<string, import("./types.js").RouteDefinition>,
+        }),
+      );
+      const res = await app.fetch(new Request("http://localhost/api/users/missing"));
+      expect(res.status).toBe(404);
+      const body = await res.json();
+      expect(body.error.code).toBe("NOT_FOUND");
+    });
+
+    it("echoes an allowed CORS origin", async () => {
+      const app = createApp({
+        db: fakeDb,
+        security: { cors: { origin: ["https://app.example", "https://admin.example"] } },
+      }).module("users", createTestModule());
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/users", {
+          headers: { Origin: "https://admin.example" },
+        }),
+      );
+      expect(res.headers.get("access-control-allow-origin")).toBe("https://admin.example");
+    });
+
+    it("rejects oversized bodies even without Content-Length", async () => {
+      const app = createApp({
+        db: fakeDb,
+        security: { maxBodySize: 8 },
+      }).module("users", createTestModule());
+
+      const res = await app.fetch(
+        new Request("http://localhost/api/users", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: "way-too-long-name" }),
+        }),
+      );
+      expect(res.status).toBe(413);
     });
   });
 
