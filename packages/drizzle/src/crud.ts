@@ -5,7 +5,7 @@
  * from a Drizzle pgTable definition.
  */
 
-import { getPrimaryKeyColumn, getTableName } from "./schema-utils.js";
+import { getColumns, getPrimaryKeyColumn, getTableName } from "./schema-utils.js";
 
 export interface CrudOptions {
   defaultLimit?: number;
@@ -72,10 +72,7 @@ export function generateCrudHandlers(table: any, db: any, options: CrudOptions =
         throw createError("VALIDATION", "body", "Request body is required");
       }
 
-      const values =
-        ctx.ownerField && ctx.ownerId
-          ? { ...(data as Record<string, unknown>), [ctx.ownerField]: ctx.ownerId }
-          : data;
+      const values = sanitizeWrite(table, data as Record<string, unknown>, ctx.ownerField, ctx.ownerId);
 
       const rows = await db.insert(table).values(values).returning();
       return rows[0];
@@ -91,9 +88,11 @@ export function generateCrudHandlers(table: any, db: any, options: CrudOptions =
         throw createError("VALIDATION", "body", "Request body is required");
       }
 
+      const values = sanitizeWrite(table, data as Record<string, unknown>, ctx.ownerField, undefined);
+
       const rows = await db
         .update(table)
-        .set(data)
+        .set(values)
         .where(scopedWhere(table, ctx, eq, and, eq(table[pk.name], id)))
         .returning();
       const row = rows[0];
@@ -114,6 +113,26 @@ export function generateCrudHandlers(table: any, db: any, options: CrudOptions =
       return { success: true };
     },
   };
+}
+
+const DENIED_WRITE_FIELDS = new Set(["id", "role", "createdAt", "updatedAt", "created_at", "updated_at"]);
+
+function sanitizeWrite(
+  table: Record<string, unknown>,
+  data: Record<string, unknown>,
+  ownerField?: string,
+  ownerId?: string,
+): Record<string, unknown> {
+  const columns = getColumns(table);
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (!(key in columns)) continue;
+    if (DENIED_WRITE_FIELDS.has(key)) continue;
+    if (ownerField && key === ownerField) continue;
+    out[key] = value;
+  }
+  if (ownerField && ownerId) out[ownerField] = ownerId;
+  return out;
 }
 
 function ownerEq(

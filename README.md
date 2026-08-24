@@ -22,13 +22,13 @@
 
 > **[Leia em Português](#portugues)**
 
-**Every Next.js app grows a second codebase: the API layer.** The database schema
-already knows every table, every column, every type — and then the routes, the
-validation, the client calls and the cache keys get written again by hand, and
-drift a little further with every feature. Narsil derives the whole chain from
-the Drizzle schema instead: define a table, get typed REST endpoints, a typed
-client and React hooks — with auth, rate limiting and security headers on by
-default, and no code-generation step in the middle.
+**A Next app already has the API shape.** `app/api/users/route.ts` is GET+POST;
+`app/api/users/[id]/route.ts` is GET+PATCH+DELETE. Narsil is that map, analogically:
+one Drizzle table becomes those five routes, same URLs, same verbs — you do not
+write the `route.ts` files, and nothing is code-generated.
+
+The Next app stays the UI. A rewrite sends `/api/:path*` to the Narsil process
+on Bun, so `fetch('/api/users')` in the browser looks like a normal Next API.
 
 > **Status:** working monorepo, not yet published to npm. To try it, clone the
 > repo, run `npm install && npm run build`, and start from `examples/`. The
@@ -178,6 +178,26 @@ permissions: {
 }
 ```
 
+## Analog of Next API routes
+
+| Next.js file | Narsil |
+|--------------|--------|
+| `app/api/users/route.ts` `GET`/`POST` | `.module('users', defineModule({ schema: users }))` |
+| `app/api/users/[id]/route.ts` `GET`/`PATCH`/`DELETE` | the same module, no extra file |
+
+The frontend keeps calling `/api/users`. Next only rewrites:
+
+```ts
+// next.config.ts
+export default {
+  async rewrites() {
+    return [{ source: '/api/:path*', destination: 'http://127.0.0.1:3001/api/:path*' }]
+  },
+}
+```
+
+That is the whole transform: same routes, other engine. Not a generated tree of `route.ts`.
+
 ## Performance — this is not a Next.js Route Handler
 
 If you mount Narsil inside `app/api/[[...route]]/route.ts`, you are still inside Next's Function. That path **cannot** be many times faster than the standard Next API: same runtime, same cold start, same pipeline.
@@ -213,13 +233,13 @@ MIT
 
 # Narsil (PT-BR)
 
-**Todo app Next.js cria um segundo codebase: a camada de API.** O schema do banco
-já sabe cada tabela, cada coluna, cada tipo — e mesmo assim as rotas, a
-validação, as chamadas do client e as chaves de cache são escritas de novo à
-mão, divergindo um pouco mais a cada feature. O Narsil deriva a cadeia inteira
-do schema Drizzle: defina uma tabela e receba endpoints REST tipados, client
-tipado e hooks React — com auth, rate limiting e headers de segurança ligados
-por padrão, sem etapa de code generation no meio.
+**O app Next já tem o formato da API.** `app/api/users/route.ts` é GET+POST;
+`app/api/users/[id]/route.ts` é GET+PATCH+DELETE. O Narsil é esse mapa, por analogia:
+uma tabela Drizzle vira essas cinco rotas, mesmos URLs, mesmos verbos — você não
+escreve os `route.ts`, e nada é gerado por IA.
+
+O Next fica na UI. Um rewrite manda `/api/:path*` para o processo Narsil no Bun,
+então `fetch('/api/users')` no browser parece a API normal do Next.
 
 > **Status:** monorepo funcional, ainda não publicado no npm. Para experimentar,
 > clone o repositório, rode `npm install && npm run build` e comece pelos
@@ -368,6 +388,26 @@ permissions: {
   delete: ['admin'],                       // Array = qualquer match
 }
 ```
+
+## Analogia com as rotas do Next
+
+| Arquivo Next | Narsil |
+|--------------|--------|
+| `app/api/users/route.ts` `GET`/`POST` | `.module('users', defineModule({ schema: users }))` |
+| `app/api/users/[id]/route.ts` `GET`/`PATCH`/`DELETE` | o mesmo módulo, sem arquivo extra |
+
+O front continua chamando `/api/users`. O Next só faz rewrite:
+
+```ts
+// next.config.ts
+export default {
+  async rewrites() {
+    return [{ source: '/api/:path*', destination: 'http://127.0.0.1:3001/api/:path*' }]
+  },
+}
+```
+
+Essa é a transformação inteira: mesmas rotas, outro motor. Sem árvore gerada de `route.ts`.
 
 ## Performance — isso não é uma Route Handler do Next
 

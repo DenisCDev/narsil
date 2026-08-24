@@ -143,10 +143,15 @@ function registerModule(state: AppState, basePath: string, name: string, config:
     const customRoutes = config.routes(router);
     for (const [routeName, routeDef] of Object.entries(customRoutes)) {
       const routePath = `${prefix}${routeDef.path}`;
-      state.router.add(routeDef.method as HttpMethod, routePath, routeDef.handler as RouteHandler, {
-        module: name,
-        operation: routeName,
-      });
+      state.router.add(
+        routeDef.method as HttpMethod,
+        routePath,
+        wrapHandler(routeDef.handler as RouteHandler, config, routeName, "custom"),
+        {
+          module: name,
+          operation: routeName,
+        },
+      );
     }
   }
 }
@@ -156,11 +161,16 @@ function registerModule(state: AppState, basePath: string, name: string, config:
 function wrapHandler(
   handler: RouteHandler,
   config: ModuleConfig,
-  operation: "list" | "get" | "create" | "update" | "delete",
+  operation: string,
+  kind: "crud" | "custom" = "crud",
 ): RouteHandler {
   return async (ctx: NexusContext): Promise<unknown> => {
-    // Check permissions
-    const permission = config.permissions?.[operation];
+    const crudOp = operation as "list" | "get" | "create" | "update" | "delete";
+    const permission = config.permissions?.[crudOp] ?? (config.permissions as Record<string, unknown> | undefined)?.[operation];
+    if (kind === "crud" && permission === undefined) {
+      const { NexusForbiddenError } = await import("./errors.js");
+      throw new NexusForbiddenError();
+    }
     if (permission) {
       await checkPermission(permission, ctx);
     }
@@ -211,29 +221,43 @@ async function checkPermission(rule: any, ctx: NexusContext): Promise<void> {
   }
 
   const presets = Array.isArray(rule) ? rule : [rule];
+  let lastError: unknown;
   for (const preset of presets) {
-    switch (preset) {
-      case "public":
-        return; // Always allowed
-      case "authenticated":
-        if (!ctx.user) {
-          const { NexusAuthError } = await import("./errors.js");
-          throw new NexusAuthError();
-        }
-        return;
-      case "admin":
-        if (!ctx.user || ctx.user.role !== "admin") {
-          const { NexusForbiddenError } = await import("./errors.js");
-          throw new NexusForbiddenError();
-        }
-        return;
-      case "owner":
-        // Row scoping happens in CRUD via ctx.ownerId; here we only require a user.
-        if (!ctx.user) {
-          const { NexusAuthError } = await import("./errors.js");
-          throw new NexusAuthError();
-        }
-        return;
+    try {
+      await checkPreset(preset, ctx);
+      return;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (lastError) throw lastError;
+}
+
+async function checkPreset(preset: unknown, ctx: NexusContext): Promise<void> {
+  switch (preset) {
+    case "public":
+      return;
+    case "authenticated":
+      if (!ctx.user) {
+        const { NexusAuthError } = await import("./errors.js");
+        throw new NexusAuthError();
+      }
+      return;
+    case "admin":
+      if (!ctx.user || ctx.user.role !== "admin") {
+        const { NexusForbiddenError } = await import("./errors.js");
+        throw new NexusForbiddenError();
+      }
+      return;
+    case "owner":
+      if (!ctx.user) {
+        const { NexusAuthError } = await import("./errors.js");
+        throw new NexusAuthError();
+      }
+      return;
+    default: {
+      const { NexusForbiddenError } = await import("./errors.js");
+      throw new NexusForbiddenError();
     }
   }
 }
@@ -254,22 +278,22 @@ async function handleRequest(state: AppState, _basePath: string, request: Reques
     const requestOrigin = request.headers.get("origin");
 
     // CORS preflight
-    if (method === ("OPTIONS" as any)) {
-      const corsConfig = security.cors || { origin: "*" };
-      if (typeof corsConfig === "object") {
-        return new Response(null, {
-          status: 204,
-          headers: buildCorsHeaders(corsConfig, requestOrigin),
-        });
-      }
+    if (method === ("OPTIONS" as HttpMethod | "OPTIONS") && security.cors !== false) {
+      const corsConfig = typeof security.cors === "object" ? security.cors : { origin: "*" };
+      return new Response(null, {
+        status: 204,
+        headers: buildCorsHeaders(corsConfig, requestOrigin),
+      });
     }
 
     // Match route
     const match = state.router.match(method, url.pathname);
     if (!match) {
-      return Response.json(
+      return jsonWithSecurity(
         { error: { code: "NOT_FOUND", message: `Route not found: ${method} ${url.pathname}` } },
-        { status: 404 },
+        404,
+        security,
+        requestOrigin,
       );
     }
 
@@ -374,13 +398,43 @@ async function handleRequest(state: AppState, _basePath: string, request: Reques
       headers: responseHeaders,
     });
   } catch (error) {
+    const security = { ...DEFAULT_SECURITY, ...state.config.security };
+    const requestOrigin = request.headers.get("origin");
     const mapped = mapHttpError(error);
     if (mapped) {
-      return Response.json(mapped.body, { status: mapped.status });
+      return jsonWithSecurity(mapped.body, mapped.status, security, requestOrigin);
     }
     console.error("[Narsil] Unhandled error:", error);
-    return Response.json({ error: { code: "INTERNAL_ERROR", message: "Internal server error" } }, { status: 500 });
+    return jsonWithSecurity(
+      { error: { code: "INTERNAL_ERROR", message: "Internal server error" } },
+      500,
+      security,
+      requestOrigin,
+    );
   }
+}
+
+function jsonWithSecurity(
+  body: unknown,
+  status: number,
+  security: Required<SecurityConfig>,
+  requestOrigin: string | null,
+): Response {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (security.cors !== false) {
+    Object.assign(
+      headers,
+      buildCorsHeaders(typeof security.cors === "object" ? security.cors : { origin: "*" }, requestOrigin),
+    );
+  }
+  if (security.helmet !== false) {
+    Object.assign(headers, {
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Referrer-Policy": "strict-origin-when-cross-origin",
+    });
+  }
+  return new Response(JSON.stringify(body), { status, headers });
 }
 
 function mapHttpError(error: unknown): { status: number; body: unknown } | null {

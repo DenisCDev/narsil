@@ -48,6 +48,15 @@ function fakeDb(rows: Record<string, unknown>[] = []) {
 }
 
 describe("generateCrudHandlers owner scope", () => {
+  it("strips role and id from create payloads", async () => {
+    const db = fakeDb([{ id: "1", title: "t", userId: "u1" }]);
+    const handlers = generateCrudHandlers(fakeTable(), db);
+    await handlers.create({
+      body: { title: "t", role: "admin", id: "forged" },
+    });
+    expect(db.calls.values).toEqual({ title: "t" });
+  });
+
   it("stamps ownerField on create and ignores the client value", async () => {
     const db = fakeDb([{ id: "1", title: "t", userId: "u1" }]);
     const handlers = generateCrudHandlers(fakeTable(), db);

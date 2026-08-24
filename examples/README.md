@@ -1,5 +1,16 @@
 # Narsil v2 — Example
 
+The Next UI keeps calling `/api/users` like a normal App Router API.
+The Narsil process on `:3001` is that API. In `next.config.ts`:
+
+```ts
+async rewrites() {
+  return [{ source: '/api/:path*', destination: 'http://127.0.0.1:3001/api/:path*' }]
+}
+```
+
+One Drizzle table replaces `app/api/users/route.ts` + `app/api/users/[id]/route.ts`.
+
 ## Structure
 
 ```

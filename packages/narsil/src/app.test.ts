@@ -42,6 +42,14 @@ function createTestModule(overrides: Partial<ModuleConfig> = {}): ModuleConfig {
   return {
     schema: fakeSchema,
     ...overrides,
+    permissions: {
+      list: "public",
+      get: "public",
+      create: "public",
+      update: "public",
+      delete: "public",
+      ...overrides.permissions,
+    },
   };
 }
 
@@ -221,6 +229,19 @@ describe("createApp integration", () => {
       );
 
       expect(capturedUser).toBeNull();
+    });
+  });
+
+  describe("deny by default", () => {
+    it("rejects CRUD when the operation has no permission rule", async () => {
+      const app = createApp({ db: fakeDb }).module("users", {
+        schema: fakeSchema,
+        permissions: { list: "public" },
+      });
+      const res = await app.fetch(
+        new Request("http://localhost/api/users/1", { method: "DELETE" }),
+      );
+      expect(res.status).toBe(403);
     });
   });
 

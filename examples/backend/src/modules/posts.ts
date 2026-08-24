@@ -6,6 +6,7 @@ import { posts } from "../db/schema.js";
 
 export const postsModule = defineModule({
   schema: posts,
+  ownerField: "authorId",
   crud: {
     list: { defaultLimit: 10, maxLimit: 50 },
     create: true,
