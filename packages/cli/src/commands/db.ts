@@ -31,6 +31,16 @@ export async function execute(args: string[]): Promise<void> {
 
   const cwd = process.cwd();
 
+  const axumProject =
+    (existsSync(join(cwd, "backend", "Cargo.toml")) || existsSync(join(cwd, "Cargo.toml"))) &&
+    !existsSync(join(cwd, "backend", "drizzle.config.ts")) &&
+    !existsSync(join(cwd, "drizzle.config.ts"));
+  if (axumProject) {
+    console.error("  Axum talks to Postgres/Supabase via sqlx, not drizzle-kit.");
+    console.error("  Create tables in SQL (Supabase SQL editor or a migration). `narsil db` is the Elysia path.");
+    process.exit(1);
+  }
+
   // Find drizzle config
   const configCandidates = [join(cwd, "backend", "drizzle.config.ts"), join(cwd, "drizzle.config.ts")];
   const configPath = configCandidates.find((c) => existsSync(c));

@@ -15,9 +15,12 @@ One Drizzle table replaces `app/api/users/route.ts` + `app/api/users/[id]/route.
 
 ```
 examples/
-  backend/         # Standalone Narsil backend (port 3001)
+  backend/         # Elysia/TypeScript backend (port 3001) — default
+  axum/            # Optional Axum backend, same /api analog
   frontend/        # Next.js frontend (port 3000)
 ```
+
+`narsil init` scaffolds Elysia. `narsil init --runtime axum` scaffolds Axum. The Next rewrite is the same either way.
 
 ## Quick Start
 

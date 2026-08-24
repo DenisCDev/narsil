@@ -36,15 +36,18 @@ function printHelp(): void {
   Usage: npx narsil <command> [options]
 
   Commands:
-    init                  Scaffold a Narsil backend project
-    dev                   Start dev server with hot reload
-    db push               Push schema to database (drizzle-kit push)
+    init [--runtime elysia|axum]
+                          Scaffold a backend. Default: elysia (Bun, Vercel).
+                          axum is the optional Rust/Axum runtime (Fly/VPS).
+    dev                   Start the backend (tsx watch, or cargo run for Axum)
+    db push               Push schema to database (drizzle-kit; Elysia only)
     db pull               Pull schema from database (drizzle-kit pull)
     db generate           Generate migration files (drizzle-kit generate)
     db migrate            Run pending migrations (drizzle-kit migrate)
 
   Examples:
     npx narsil init
+    npx narsil init --runtime axum
     npx narsil dev
     npx narsil db push
   `);

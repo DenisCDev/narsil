@@ -11,10 +11,11 @@ npm install -g @narsil/cli
 ## Usage
 
 ```bash
-narsil init        # Scaffold a new project
-narsil dev         # Start dev server with hot reload
-narsil db push     # Push schema to database
-narsil db generate # Generate migrations
+narsil init                 # Elysia/Bun backend (default, Vercel)
+narsil init --runtime axum  # Axum backend (Fly/VPS/Docker)
+narsil dev                  # tsx watch, or cargo run for Axum
+narsil db push              # drizzle-kit (Elysia only)
+narsil db generate          # Generate migrations
 ```
 
 See the [root README](../../README.md) for full documentation.

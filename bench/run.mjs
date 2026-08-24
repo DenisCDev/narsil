@@ -1,5 +1,5 @@
 /**
- * Bench Narsil vs Next.js 16.3.2 in production (`next start`).
+ * Bench Narsil (Elysia/Node) vs Axum vs Next.js 16.3.2 in production (`next start`).
  * Usage: node bench/run.mjs
  */
 import { spawn } from "node:child_process";
@@ -11,6 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
 const NEXT = "http://127.0.0.1:3016";
 const NARSIL = "http://127.0.0.1:3017";
+const AXUM = "http://127.0.0.1:3018";
 const N = 200;
 const WARM = 30;
 
@@ -30,7 +31,7 @@ function start(cmd, args, cwd, extraEnv = {}) {
   return child;
 }
 
-async function waitFor(url, tries = 80) {
+async function waitFor(url, tries = 240) {
   for (let i = 0; i < tries; i++) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(1_000) });
@@ -86,10 +87,15 @@ const auth = { Authorization: `Bearer ${token}` };
 
 const nextProc = start("npx", ["next", "start", "-H", "127.0.0.1", "-p", "3016"], join(here, "next16"));
 const narsilProc = start("node", ["bench/narsil-server.mjs"], root, { PORT: "3017" });
+const axumProc = start("cargo", ["run", "--release", "-p", "axum-bench"], root, {
+  PORT: "3018",
+  HOST: "127.0.0.1",
+});
 
 const kill = () => {
   nextProc.kill();
   narsilProc.kill();
+  axumProc.kill();
 };
 process.on("exit", kill);
 process.on("SIGINT", () => {
@@ -100,10 +106,12 @@ process.on("SIGINT", () => {
 try {
   await waitFor(`${NEXT}/feed`);
   await waitFor(`${NARSIL}/api/users`);
+  await waitFor(`${AXUM}/api/users`);
 
   const rows = [];
   rows.push(await measure("Next 16.3.2 GET /api/users + JWT", () => getOk(`${NEXT}/api/users`, auth)));
   rows.push(await measure("Narsil GET /api/users + JWT", () => getOk(`${NARSIL}/api/users`, auth)));
+  rows.push(await measure("Axum GET /api/users + JWT", () => getOk(`${AXUM}/api/users`, auth)));
   rows.push(
     await measure("Next 16.3.2 POST /api/users + JWT", () =>
       postOk(`${NEXT}/api/users`, auth, JSON.stringify({ name: "Ada" })),
@@ -114,12 +122,17 @@ try {
       postOk(`${NARSIL}/api/users`, auth, JSON.stringify({ name: "Ada" })),
     ),
   );
+  rows.push(
+    await measure("Axum POST /api/users + JWT", () =>
+      postOk(`${AXUM}/api/users`, auth, JSON.stringify({ name: "Ada" })),
+    ),
+  );
   rows.push(await measure("Next 16.3.2 RSC /feed (db in-process)", () => getOk(`${NEXT}/feed`)));
   rows.push(await measure("Next 16.3.2 RSC /feed-via-api (Route Handler)", () => getOk(`${NEXT}/feed-via-api`)));
 
   const out = [
     "",
-    "# bench vs Next.js 16.3.2 (production `next start`)",
+    "# bench vs Next.js 16.3.2 (production `next start`) + Narsil + Axum",
     "",
     `Node ${process.version} · ${N} pedidos após ${WARM} warmup · sequencial · 127.0.0.1`,
     "",

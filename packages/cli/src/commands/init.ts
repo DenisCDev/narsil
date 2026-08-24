@@ -7,8 +7,74 @@
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { scaffoldAxum } from "./scaffold-axum.js";
 
-export async function execute(_args: string[]): Promise<void> {
+export type Runtime = "elysia" | "axum";
+
+export function parseInitArgs(args: string[]): { runtime: Runtime; help: boolean } {
+  let runtime: Runtime = "elysia";
+  let help = false;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i] ?? "";
+    if (arg === "--help" || arg === "-h") {
+      help = true;
+      continue;
+    }
+    if (arg === "--runtime") {
+      const value = args[i + 1];
+      if (!value || value.startsWith("-")) {
+        throw new Error("Missing value for --runtime. Use elysia (default) or axum.");
+      }
+      i += 1;
+      runtime = normalizeRuntime(value);
+      continue;
+    }
+    if (arg.startsWith("--runtime=")) {
+      runtime = normalizeRuntime(arg.slice("--runtime=".length));
+      continue;
+    }
+    throw new Error(`Unknown option: ${arg}`);
+  }
+  return { runtime, help };
+}
+
+function normalizeRuntime(value: string): Runtime {
+  const v = value.toLowerCase();
+  if (v === "elysia" || v === "bun" || v === "ts" || v === "typescript") return "elysia";
+  if (v === "axum" || v === "rust") return "axum";
+  throw new Error(`Unknown runtime "${value}". Use elysia (default) or axum.`);
+}
+
+function printInitHelp(): void {
+  // smaug-ignore console-log: CLI help text for narsil init
+  console.log(`
+  narsil init [--runtime elysia|axum]
+
+    --runtime elysia   TypeScript/Bun backend (default). Deploy on Vercel.
+    --runtime axum     Rust/Axum backend. Same /api URLs. Fly/VPS/Docker, not Vercel.
+
+  Alias: rust → axum.
+  `);
+}
+
+export async function execute(args: string[]): Promise<void> {
+  let parsed: { runtime: Runtime; help: boolean };
+  try {
+    parsed = parseInitArgs(args);
+  } catch (err) {
+    console.error(`  ${(err as Error).message}`);
+    process.exit(1);
+    return;
+  }
+  if (parsed.help) {
+    printInitHelp();
+    return;
+  }
+  if (parsed.runtime === "axum") {
+    await scaffoldAxum(process.cwd());
+    return;
+  }
+
   const cwd = process.cwd();
 
   console.log("\n  Narsil — Initializing project...\n");

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Optional Axum runtime (`narsil init --runtime axum`). Same `/api` analog as Elysia, long-lived process for Fly/VPS/Docker. Elysia remains the default (Vercel).
+
 ## 2.0.0
 
 Initial open-source release of Narsil — the fastest backend framework for Next.js.
