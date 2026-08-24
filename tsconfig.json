@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/cache" },
+    { "path": "packages/server" },
+    { "path": "packages/drizzle" },
+    { "path": "packages/narsil" },
+    { "path": "packages/client-sdk" },
+    { "path": "packages/react" },
+    { "path": "packages/cli" }
+  ]
+}
