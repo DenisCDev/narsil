@@ -1,8 +1,7 @@
 <h1 align="center">Narsil</h1>
 
 <p align="center">
-  <b>Type-safe REST APIs generated from your Drizzle schema, with no code generation step</b><br>
-  <sub><i>"Seek for the Sword that was broken..."</i></sub>
+  <b>A typed REST API derived from a Drizzle schema, without generated source files</b>
 </p>
 
 <p align="center">
@@ -16,19 +15,18 @@
   <img src="assets/mtg-anduril.jpg" width="480" alt="Andúril, the reforged Narsil, blazing with runes along the blade. Art by Jason Rainville for Magic: The Gathering">
 </p>
 
-> *"Andúril, Narsil Reforged"*, art by Jason Rainville for **Magic: The Gathering**,
-> Tales of Middle-earth Commander (2023). The sword that was broken, forged anew.
-> This framework is also on its second forge (v2), sharper than the first.
+<p align="center">
+  <sub><i>"Renewed shall be blade that was broken"</i><br>
+  — <b>The Fellowship of the Ring</b>, book I, chapter X · art by Jason Rainville for Magic: The Gathering, Tales of Middle-earth Commander (2023)
+</p>
 
 > **[Leia em Português](#portugues)**
 
-**A Next app already has the API shape.** `app/api/users/route.ts` is GET+POST;
-`app/api/users/[id]/route.ts` is GET+PATCH+DELETE. Narsil is that map, analogically:
-one Drizzle table becomes those five routes, same URLs, same verbs — you do not
-write the `route.ts` files, and nothing is code-generated.
-
-The Next app stays the UI. A rewrite sends `/api/:path*` to the Narsil process
-on Bun, so `fetch('/api/users')` in the browser looks like a normal Next API.
+Narsil reads a Drizzle table definition and exposes list, read, create, update
+and delete operations under the URL structure used by Next.js route handlers.
+The API runs in a separate TypeScript/Narsil or Axum service; a rewrite keeps browser
+requests under `/api`. Types from the server are also available to the client
+and React hooks, without writing route files or generating source code.
 
 > **Status:** working monorepo, not yet published to npm. To try it, clone the
 > repo, run `npm install && npm run build`, and start from `examples/`. The
@@ -36,13 +34,13 @@ on Bun, so `fetch('/api/users')` in the browser looks like a normal Next API.
 
 ## Features
 
-- **Auto-CRUD** — Define a Drizzle schema, get `list`, `get`, `create`, `update`, `delete` endpoints instantly
+- **CRUD from the schema** — A Drizzle definition provides `list`, `get`, `create`, `update` and `delete` endpoints
 - **Type-safe client** — Full TypeScript inference from server to client via `typeof app`
 - **React hooks** — `useQuery` and `useMutation` with SWR caching and optimistic updates
 - **Auth built-in** — Declarative permissions (`public`, `authenticated`, `owner`, `admin`) + custom functions
-- **Security defaults** — CORS, Helmet-style headers, rate limiting, body size limits — all ON by default
-- **Edge-ready** — Works on Node.js 18+, Vercel Edge, Cloudflare Workers, Bun, Deno
-- **Optional Axum** — `narsil init --runtime axum` for a long-lived Rust process. Elysia stays the default (Vercel).
+- **Security defaults** — CORS, security headers, rate limiting and body size limits are enabled by default
+- **Multiple runtimes** — Supports Node.js 18+, Vercel Edge, Cloudflare Workers, Bun and Deno
+- **Optional Axum** — `narsil init --runtime axum` creates a long-lived Rust process. The TypeScript runtime remains the default and runs on Bun or Node.
 
 ## Quick Start
 
@@ -228,14 +226,20 @@ Drizzle stays available via `schema: usersTable` when that is what the app alrea
 
 If you mount Narsil inside `app/api/[[...route]]/route.ts`, you are still inside Next's Function. That path **cannot** be many times faster than the standard Next API: same runtime, same cold start, same pipeline.
 
-The product goal is a **separate HTTP server**. Default host is [Elysia](https://elysiajs.com) on Bun (first-class on Vercel since November 2025). Next stays the UI and calls this API. That is how the request stays off Next's router.
+The product goal is a **separate HTTP server**. Narsil's default runtime is
+TypeScript: `app.start()` uses `Bun.serve` when the process is Bun and Node's
+HTTP server otherwise. Next stays the UI and calls this API, so requests do not
+pass through Next's router.
 
 ```bash
-npx narsil init                 # Elysia — default, deploy on Vercel
+npx narsil init                 # TypeScript — default, Bun or Node
 npx narsil init --runtime axum  # Axum — same /api URLs, Fly/VPS/Docker
 ```
 
 Axum is an option, not a replacement. The rewrite in `next.config.ts` is identical. The TypeScript client keeps calling `/api/users`; with Axum, import `AppType` from `backend/narsil-contract.ts` because there is no `typeof app` from Rust.
+
+Because `app.fetch` follows the Web Standard request/response contract, it can
+also be mounted in Elysia when that framework is installed:
 
 ```ts
 import { Elysia } from 'elysia'
@@ -254,7 +258,9 @@ On Vercel, give the API its own project (not the Next app) and:
 
 `app.start()` already prefers `Bun.serve` when the process is Bun, and falls back to Node `http` otherwise. `app.fetch` is the WinterCG contract: Next, Elysia, Cloudflare, and Vercel Functions all speak it.
 
-Vercel Functions (even Elysia + Fluid compute) still have a concurrency ceiling. For a long-lived process that holds many connections, run Bun on Fly/a VPS. Do not promise "instant" on a cold Function.
+Vercel Functions still have a concurrency ceiling. For a long-lived process
+that holds many connections, run Bun on Fly or a VPS. Cold Functions can add
+startup latency.
 
 ### Measured vs Next.js 16.3.2
 
@@ -271,7 +277,7 @@ Same machine, Node v22.22.0, sequential HTTP, 200 requests after 30 warmup. Next
 | Next 16.3.2 RSC `/feed` (db in-process) | 11.09 ms | 20.05 ms | 23.61 ms | 11.69 ms |
 | Next 16.3.2 RSC `/feed-via-api` (Route Handler) | 12.66 ms | 20.77 ms | 26.15 ms | 13.36 ms |
 
-GET+JWT p50: Next 4.74 ms → Narsil 2.68 ms (**1.8×**) → Axum 1.67 ms (**2.8×** vs Next). POST+JWT p50: Next 4.79 ms → Narsil 2.04 ms (**2.3×**) → Axum 0.91 ms (**5.3×** vs Next). Axum is faster here; it is still the optional runtime — Elysia stays the default because it deploys on Vercel. A page that queries the db *inside* the RSC is a different job; Narsil/Axum do not render HTML.
+GET+JWT p50: Next 4.74 ms → Narsil 2.68 ms (**1.8×**) → Axum 1.67 ms (**2.8×** vs Next). POST+JWT p50: Next 4.79 ms → Narsil 2.04 ms (**2.3×**) → Axum 0.91 ms (**5.3×** vs Next). Axum is faster here; it remains the optional runtime, while TypeScript is the default. A page that queries the db *inside* the RSC is a different job; Narsil/Axum do not render HTML.
 
 ## License
 
@@ -283,13 +289,12 @@ MIT
 
 # Narsil (PT-BR)
 
-**O app Next já tem o formato da API.** `app/api/users/route.ts` é GET+POST;
-`app/api/users/[id]/route.ts` é GET+PATCH+DELETE. O Narsil é esse mapa, por analogia:
-uma tabela Drizzle vira essas cinco rotas, mesmos URLs, mesmos verbos — você não
-escreve os `route.ts`, e nada é gerado por IA.
-
-O Next fica na UI. Um rewrite manda `/api/:path*` para o processo Narsil no Bun,
-então `fetch('/api/users')` no browser parece a API normal do Next.
+O Narsil lê a definição de uma tabela Drizzle e expõe operações de listagem,
+leitura, criação, atualização e exclusão no formato de URLs usado pelas rotas do
+Next.js. A API roda em um serviço TypeScript/Narsil ou Axum separado; um rewrite mantém as
+requisições do navegador sob `/api`. Os tipos do servidor também ficam
+disponíveis para o cliente e para os hooks React, sem escrever arquivos de rota
+nem gerar código-fonte.
 
 > **Status:** monorepo funcional, ainda não publicado no npm. Para experimentar,
 > clone o repositório, rode `npm install && npm run build` e comece pelos
@@ -297,13 +302,13 @@ então `fetch('/api/users')` no browser parece a API normal do Next.
 
 ## Funcionalidades
 
-- **Auto-CRUD** — Defina um schema Drizzle e receba endpoints `list`, `get`, `create`, `update`, `delete` automaticamente
+- **CRUD a partir do schema** — Uma definição Drizzle fornece endpoints `list`, `get`, `create`, `update` e `delete`
 - **Client type-safe** — Inferência completa de tipos do servidor ao cliente via `typeof app`
 - **React hooks** — `useQuery` e `useMutation` com cache SWR e updates otimistas
 - **Auth integrado** — Permissões declarativas (`public`, `authenticated`, `owner`, `admin`) + funções customizadas
-- **Segurança por padrão** — CORS, headers de segurança, rate limiting, limite de body — tudo ativo por padrão
-- **Edge-ready** — Funciona em Node.js 18+, Vercel Edge, Cloudflare Workers, Bun, Deno
-- **Axum opcional** — `narsil init --runtime axum` para um processo Rust longo. O Elysia continua o default (Vercel).
+- **Segurança por padrão** — CORS, cabeçalhos de segurança, limite de requisições e tamanho de corpo ficam ativos por padrão
+- **Múltiplos runtimes** — Funciona em Node.js 18+, Vercel Edge, Cloudflare Workers, Bun e Deno
+- **Axum opcional** — `narsil init --runtime axum` cria um processo Rust de longa duração. O runtime TypeScript continua sendo o padrão e roda em Bun ou Node.
 
 ## Início rápido
 
@@ -470,20 +475,26 @@ createApp({ db: prisma }).module('users', defineModule({ prisma: 'user', permiss
 
 Drizzle continua no `schema:` se o app já usa isso.
 
-Números medidos contra **Next.js 16.3.2** (`next start`, produção, Node v22.22.0, 200 pedidos): GET+JWT p50 Next 4.74 ms → Narsil 2.68 ms (1,8×) → Axum 1.67 ms (2,8× vs Next). POST+JWT p50 Next 4.79 ms → Narsil 2.04 ms → Axum 0.91 ms (5,3× vs Next). Axum é mais rápido neste bench; continua opcional — Elysia é o default porque sobe na Vercel. Tabela completa na seção em inglês. Script: `node bench/run.mjs`.
+Números medidos contra **Next.js 16.3.2** (`next start`, produção, Node v22.22.0, 200 pedidos): GET+JWT p50 Next 4.74 ms → Narsil 2.68 ms (1,8×) → Axum 1.67 ms (2,8× vs Next). POST+JWT p50 Next 4.79 ms → Narsil 2.04 ms → Axum 0.91 ms (5,3× vs Next). O Axum é mais rápido neste teste e continua opcional; o runtime TypeScript é o padrão. Tabela completa na seção em inglês. Script: `node bench/run.mjs`.
 
 ## Performance — isso não é uma Route Handler do Next
 
 Se você montar o Narsil em `app/api/[[...route]]/route.ts`, continua dentro da Function do Next. **Esse caminho não fica muitas vezes mais rápido** que a API padrão: mesmo runtime, mesmo cold start, mesmo pipeline.
 
-O objetivo do produto é um **servidor HTTP separado**. O host default é [Elysia](https://elysiajs.com) no Bun (suporte de primeira classe na Vercel desde novembro de 2025). O Next fica na UI e chama essa API. É assim que o request sai do router do Next.
+O objetivo do produto é um **servidor HTTP separado**. O runtime padrão do
+Narsil é TypeScript: `app.start()` usa `Bun.serve` quando o processo roda no Bun
+e o servidor HTTP do Node nos demais casos. O Next fica na interface e chama
+essa API, então as requisições não passam pelo roteador do Next.
 
 ```bash
-npx narsil init                 # Elysia — default, sobe na Vercel
+npx narsil init                 # TypeScript — padrão, Bun ou Node
 npx narsil init --runtime axum  # Axum — mesmos /api, Fly/VPS/Docker
 ```
 
 Axum é opção, não substituto. O rewrite no `next.config.ts` é o mesmo. O client TypeScript continua em `/api/users`; no Axum, o `AppType` sai de `backend/narsil-contract.ts`, porque Rust não tem `typeof app`.
+
+Como `app.fetch` segue o contrato Web Standard de requisição e resposta, ele
+também pode ser montado no Elysia quando esse framework estiver instalado:
 
 ```ts
 import { Elysia } from 'elysia'
@@ -502,7 +513,9 @@ Na Vercel, o projeto da API é outro (não o do Next) e o `vercel.json` leva:
 
 `app.start()` já prefere `Bun.serve` quando o processo é Bun, e cai no `http` do Node se não for. `app.fetch` é o contrato WinterCG: Next, Elysia, Cloudflare e Functions da Vercel falam isso.
 
-Function da Vercel (mesmo Elysia + Fluid compute) ainda tem teto de concorrência. Processo longo, muita gente junta: Bun na Fly/VPS. Não prometa "instantâneo" em Function fria.
+Functions da Vercel ainda têm limite de concorrência. Para um processo de longa
+duração com muitas conexões, rode Bun na Fly ou em uma VPS. Functions frias
+podem adicionar latência de inicialização.
 
 ## Licença
 
