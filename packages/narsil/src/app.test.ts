@@ -291,19 +291,14 @@ describe("createApp integration", () => {
         schema: fakeSchema,
         permissions: { list: "public" },
       });
-      const res = await app.fetch(
-        new Request("http://localhost/api/users/1", { method: "DELETE" }),
-      );
+      const res = await app.fetch(new Request("http://localhost/api/users/1", { method: "DELETE" }));
       expect(res.status).toBe(403);
     });
   });
 
   describe("owner isolation", () => {
     it("rejects anonymous owner routes", async () => {
-      const app = createApp({ db: fakeDb }).module(
-        "users",
-        createTestModule({ permissions: { get: "owner" } }),
-      );
+      const app = createApp({ db: fakeDb }).module("users", createTestModule({ permissions: { get: "owner" } }));
       const res = await app.fetch(new Request("http://localhost/api/users/1"));
       expect(res.status).toBe(401);
     });

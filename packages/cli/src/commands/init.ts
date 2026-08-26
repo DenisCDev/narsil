@@ -9,10 +9,10 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { scaffoldAxum } from "./scaffold-axum.js";
 
-export type Runtime = "elysia" | "axum";
+export type Runtime = "typescript" | "axum";
 
 export function parseInitArgs(args: string[]): { runtime: Runtime; help: boolean } {
-  let runtime: Runtime = "elysia";
+  let runtime: Runtime = "typescript";
   let help = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
@@ -23,7 +23,7 @@ export function parseInitArgs(args: string[]): { runtime: Runtime; help: boolean
     if (arg === "--runtime") {
       const value = args[i + 1];
       if (!value || value.startsWith("-")) {
-        throw new Error("Missing value for --runtime. Use elysia (default) or axum.");
+        throw new Error("Missing value for --runtime. Use typescript (default) or axum.");
       }
       i += 1;
       runtime = normalizeRuntime(value);
@@ -40,20 +40,20 @@ export function parseInitArgs(args: string[]): { runtime: Runtime; help: boolean
 
 function normalizeRuntime(value: string): Runtime {
   const v = value.toLowerCase();
-  if (v === "elysia" || v === "bun" || v === "ts" || v === "typescript") return "elysia";
+  if (v === "elysia" || v === "bun" || v === "ts" || v === "typescript") return "typescript";
   if (v === "axum" || v === "rust") return "axum";
-  throw new Error(`Unknown runtime "${value}". Use elysia (default) or axum.`);
+  throw new Error(`Unknown runtime "${value}". Use typescript (default) or axum.`);
 }
 
 function printInitHelp(): void {
   // smaug-ignore console-log: CLI help text for narsil init
   console.log(`
-  narsil init [--runtime elysia|axum]
+  narsil init [--runtime typescript|axum]
 
-    --runtime elysia   TypeScript/Bun backend (default). Deploy on Vercel.
+    --runtime typescript   TypeScript backend for Bun or Node (default).
     --runtime axum     Rust/Axum backend. Same /api URLs. Fly/VPS/Docker, not Vercel.
 
-  Alias: rust → axum.
+  Aliases: bun/elysia/ts → typescript; rust → axum.
   `);
 }
 

@@ -31,16 +31,16 @@ export async function run(args: string[]): Promise<void> {
 
 function printHelp(): void {
   console.log(`
-  Narsil v2 — The fastest backend for Next.js applications
+  Narsil v2 — Typed API runtime for Next.js applications
 
   Usage: npx narsil <command> [options]
 
   Commands:
-    init [--runtime elysia|axum]
-                          Scaffold a backend. Default: elysia (Bun, Vercel).
+    init [--runtime typescript|axum]
+                          Scaffold a backend. Default: TypeScript on Bun or Node.
                           axum is the optional Rust/Axum runtime (Fly/VPS).
     dev                   Start the backend (tsx watch, or cargo run for Axum)
-    db push               Push schema to database (drizzle-kit; Elysia only)
+    db push               Push schema to database (drizzle-kit; TypeScript runtime)
     db pull               Pull schema from database (drizzle-kit pull)
     db generate           Generate migration files (drizzle-kit generate)
     db migrate            Run pending migrations (drizzle-kit migrate)

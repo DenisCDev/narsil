@@ -37,7 +37,9 @@ export async function execute(args: string[]): Promise<void> {
     !existsSync(join(cwd, "drizzle.config.ts"));
   if (axumProject) {
     console.error("  Axum talks to Postgres/Supabase via sqlx, not drizzle-kit.");
-    console.error("  Create tables in SQL (Supabase SQL editor or a migration). `narsil db` is the Elysia path.");
+    console.error(
+      "  Create tables in SQL (Supabase SQL editor or a migration). `narsil db` is for the TypeScript runtime.",
+    );
     process.exit(1);
   }
 

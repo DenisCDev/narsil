@@ -14,8 +14,13 @@ afterEach(() => {
 });
 
 describe("parseInitArgs", () => {
-  it("defaults to elysia", () => {
-    expect(parseInitArgs([])).toEqual({ runtime: "elysia", help: false });
+  it("defaults to typescript", () => {
+    expect(parseInitArgs([])).toEqual({ runtime: "typescript", help: false });
+  });
+
+  it("keeps bun and elysia as typescript aliases", () => {
+    expect(parseInitArgs(["--runtime", "bun"]).runtime).toBe("typescript");
+    expect(parseInitArgs(["--runtime", "elysia"]).runtime).toBe("typescript");
   });
 
   it("selects axum", () => {
@@ -27,7 +32,7 @@ describe("parseInitArgs", () => {
   });
 
   it("rejects an unknown runtime", () => {
-    expect(() => parseInitArgs(["--runtime", "fastapi"])).toThrow(/elysia \(default\) or axum/);
+    expect(() => parseInitArgs(["--runtime", "fastapi"])).toThrow(/typescript \(default\) or axum/);
   });
 
   it("rejects a missing runtime value", () => {

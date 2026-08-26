@@ -2,7 +2,7 @@
   "name": "narsil",
   "version": "2.0.0",
   "private": true,
-  "description": "Same /api URLs as a Next.js app, served on Bun — Prisma or Drizzle, no generated route.ts",
+  "description": "Typed API routes from Prisma or Drizzle, served on Node.js or Bun",
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "tsc --build",

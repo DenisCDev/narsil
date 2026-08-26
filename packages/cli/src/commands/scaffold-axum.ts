@@ -1,5 +1,5 @@
 /**
- * Scaffolds a Rust/Axum backend that speaks the same /api analog as Elysia.
+ * Scaffolds a Rust/Axum backend that speaks the same /api analog as Narsil on TypeScript.
  * Copies crates/narsil-axum into backend/crates so the project is self-contained.
  */
 
@@ -37,8 +37,8 @@ function copyCrate(src: string, dest: string): void {
 export async function scaffoldAxum(cwd: string): Promise<void> {
   // smaug-ignore console-log: CLI progress while scaffolding the Axum backend
   console.log("\n  Narsil — Initializing Axum backend...\n");
-  // smaug-ignore console-log: CLI reminds that Elysia remains the default runtime
-  console.log("  Default runtime is still Elysia. Axum is the optional long-lived process.\n");
+  // smaug-ignore console-log: CLI reminds that TypeScript remains the default runtime
+  console.log("  Default runtime is still TypeScript on Bun or Node. Axum is the optional long-lived process.\n");
 
   const backendDir = join(cwd, "backend");
   mkdirSync(join(backendDir, "src"), { recursive: true });
@@ -183,6 +183,6 @@ HOST=0.0.0.0
   console.log("  2. cd backend && cargo run");
   console.log("  3. Keep the Next rewrite: /api/:path* → http://127.0.0.1:3001/api/:path*");
   console.log("  4. Client types: import type { AppType } from './backend/narsil-contract'");
-  console.log("\n  Axum is a long-lived process (Fly/VPS/Docker). Vercel stays on Elysia:");
-  console.log("  npx narsil init --runtime elysia\n");
+  console.log("\n  Axum is a long-lived process (Fly/VPS/Docker). TypeScript stays the default:");
+  console.log("  npx narsil init --runtime typescript\n");
 }

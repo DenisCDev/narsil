@@ -472,8 +472,7 @@ function buildCorsHeaders(
 ): Record<string, string> {
   let allowOrigin = "*";
   if (Array.isArray(cors.origin)) {
-    allowOrigin =
-      requestOrigin && cors.origin.includes(requestOrigin) ? requestOrigin : (cors.origin[0] ?? "*");
+    allowOrigin = requestOrigin && cors.origin.includes(requestOrigin) ? requestOrigin : (cors.origin[0] ?? "*");
   } else if (cors.origin) {
     allowOrigin = cors.origin;
   }

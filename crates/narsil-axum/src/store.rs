@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use serde_json::{Map, Value};
 use uuid::Uuid;
@@ -29,6 +29,12 @@ const DENIED_WRITE: &[&str] = &[
     "updated_at",
 ];
 
+type JsonObject = Map<String, Value>;
+type TableRows = HashMap<String, JsonObject>;
+type MemoryTables = HashMap<String, TableRows>;
+type MemoryTablesRead<'a> = RwLockReadGuard<'a, MemoryTables>;
+type MemoryTablesWrite<'a> = RwLockWriteGuard<'a, MemoryTables>;
+
 #[derive(Clone)]
 pub enum Store {
     Memory(MemoryStore),
@@ -38,7 +44,7 @@ pub enum Store {
 
 #[derive(Clone, Default)]
 pub struct MemoryStore {
-    inner: Arc<RwLock<HashMap<String, HashMap<String, Map<String, Value>>>>>,
+    inner: Arc<RwLock<MemoryTables>>,
 }
 
 pub struct ListQuery {
@@ -178,21 +184,11 @@ impl Store {
 }
 
 impl MemoryStore {
-    fn tables(
-        &self,
-    ) -> Result<
-        std::sync::RwLockReadGuard<'_, HashMap<String, HashMap<String, Map<String, Value>>>>,
-        AppError,
-    > {
+    fn tables(&self) -> Result<MemoryTablesRead<'_>, AppError> {
         self.inner.read().map_err(|_| AppError::Internal)
     }
 
-    fn tables_mut(
-        &self,
-    ) -> Result<
-        std::sync::RwLockWriteGuard<'_, HashMap<String, HashMap<String, Map<String, Value>>>>,
-        AppError,
-    > {
+    fn tables_mut(&self) -> Result<MemoryTablesWrite<'_>, AppError> {
         self.inner.write().map_err(|_| AppError::Internal)
     }
 

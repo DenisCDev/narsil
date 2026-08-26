@@ -61,7 +61,7 @@ struct SupabaseClaims {
 fn b64url_decode(input: &str) -> Option<Vec<u8>> {
     URL_SAFE_NO_PAD.decode(input).ok().or_else(|| {
         let mut padded = input.to_string();
-        while padded.len() % 4 != 0 {
+        while !padded.len().is_multiple_of(4) {
             padded.push('=');
         }
         URL_SAFE.decode(padded).ok()
