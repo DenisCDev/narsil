@@ -6,7 +6,8 @@
 //! SUPABASE_JWT_SECRET.
 
 use narsil_axum::{
-    connect_postgres, hmac_payload, supabase_jwt, App, Cors, Module, Permission, Permissions, Security, TableSpec,
+    connect_postgres, hmac_payload, supabase_jwt, App, Cors, Module, Permission, Permissions,
+    Security, TableSpec,
 };
 
 #[tokio::main]
@@ -28,22 +29,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .base_path("/api")
         .security(Security {
             cors: Cors::List(vec![
-                std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".into()),
+                std::env::var("CORS_ORIGIN").unwrap_or_else(|_| "http://localhost:3000".into())
             ]),
             ..Security::default()
         })
         .module(
             "users",
-            Module::new(users)
-                .list_limit(20, 100)
-                .perms(
-                    Permissions::new()
-                        .list(Permission::Public)
-                        .get(Permission::Public)
-                        .create(Permission::Authenticated)
-                        .update(Permission::Owner)
-                        .delete(Permission::Admin),
-                ),
+            Module::new(users).list_limit(20, 100).perms(
+                Permissions::new()
+                    .list(Permission::Public)
+                    .get(Permission::Public)
+                    .create(Permission::Authenticated)
+                    .update(Permission::Owner)
+                    .delete(Permission::Admin),
+            ),
         );
 
     if let Ok(secret) = std::env::var("SUPABASE_JWT_SECRET") {
