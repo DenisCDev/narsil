@@ -6,6 +6,7 @@
  */
 
 import { type IncomingMessage, type Server, type ServerResponse, createServer as createHttpServer } from "node:http";
+import { setClientIP } from "./web-standard.js";
 
 type FetchHandler = (request: Request) => Promise<Response>;
 
@@ -13,7 +14,7 @@ type FetchHandler = (request: Request) => Promise<Response>;
  * Convert Node.js IncomingMessage to Web Standard Request.
  */
 function toWebRequest(req: IncomingMessage): Request {
-  const protocol = (req.socket as any).encrypted ? "https" : "http";
+  const protocol = "encrypted" in req.socket && req.socket.encrypted ? "https" : "http";
   const host = req.headers.host ?? "localhost";
   const url = `${protocol}://${host}${req.url ?? "/"}`;
 
@@ -82,6 +83,7 @@ export function createNodeServer(fetchHandler: FetchHandler): Server {
   return createHttpServer(async (req, res) => {
     try {
       const webReq = toWebRequest(req);
+      setClientIP(webReq, req.socket.remoteAddress);
       const webRes = await fetchHandler(webReq);
       await writeWebResponse(webRes, res);
     } catch (error) {

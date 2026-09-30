@@ -303,7 +303,7 @@ async function handleRequest(state: AppState, _basePath: string, request: Reques
 
     // Build context
     const headers = parseHeaders(request);
-    const ip = getClientIP(request);
+    const ip = getClientIP(request, state.config.clientIP);
 
     // Resolve authenticated user
     let user = null;
