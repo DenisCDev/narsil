@@ -180,6 +180,8 @@ export interface AppConfig {
   auth?: (token: string) => Promise<NexusUser | null> | NexusUser | null;
   /** Security configuration (defaults: all ON) */
   security?: SecurityConfig;
+  /** Trusted platform address resolver. Never use unverified client-supplied headers. */
+  clientIP?: (request: Request) => string | undefined;
 }
 
 // ─── App Interface (with phantom type accumulation) ──────────────────

@@ -3,7 +3,13 @@
  * Next.js Route Handlers are not this path; they still pay Next's pipeline.
  */
 
+import { setClientIP } from "./web-standard.js";
+
 type FetchHandler = (request: Request) => Promise<Response> | Response;
+
+interface BunRequestServer {
+  requestIP(request: Request): { address: string } | null;
+}
 
 export interface BunServeHandle {
   port: number;
@@ -18,7 +24,10 @@ export function createBunServer(fetchHandler: FetchHandler, port: number): BunSe
   }
   const server = bun.serve({
     port,
-    fetch: (request: Request) => fetchHandler(request),
+    fetch: (request: Request, host: BunRequestServer) => {
+      setClientIP(request, host.requestIP(request)?.address);
+      return fetchHandler(request);
+    },
   });
   return { port: server.port, stop: () => server.stop() };
 }
