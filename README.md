@@ -1,5 +1,7 @@
 <h1 align="center">Narsil</h1>
 
+<p align="center"><b>English</b> · <a href="README.pt-BR.md">Português</a></p>
+
 <p align="center">
   <b>A typed REST API derived from a Drizzle schema, without generated source files</b>
 </p>
